@@ -1,0 +1,15 @@
+﻿apiVersion: 1
+
+datasources:
+  - name: TrafficPostgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: traffic
+    user: traffic_user
+    secureJsonData:
+      password: traffic_pass
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1500
+      timescaledb: false

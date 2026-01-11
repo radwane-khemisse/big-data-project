@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 38,
+  "title": "Smart City Traffic KPIs",
+  "tags": ["smart-city", "traffic"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Avg Vehicle Count by Zone (5-min)",
+      "datasource": "TrafficPostgres",
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT event_hour AS time, avg_vehicle_count, zone AS metric FROM kpi_traffic_by_zone ORDER BY event_hour",
+          "timeColumn": "time",
+          "metricColumn": "metric"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 9}
+    },
+    {
+      "type": "timeseries",
+      "title": "Avg Speed by Road (5-min)",
+      "datasource": "TrafficPostgres",
+      "targets": [
+        {
+          "refId": "B",
+          "format": "time_series",
+          "rawSql": "SELECT event_hour AS time, avg_speed, road_id AS metric FROM kpi_speed_by_road ORDER BY event_hour",
+          "timeColumn": "time",
+          "metricColumn": "metric"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 9, "w": 24, "h": 9}
+    },
+    {
+      "type": "table",
+      "title": "Top Congested Zones (latest 5-min)",
+      "datasource": "TrafficPostgres",
+      "targets": [
+        {
+          "refId": "C",
+          "format": "table",
+          "rawSql": "SELECT zone, event_hour, congestion_rate, avg_speed, avg_occupancy FROM kpi_congestion_by_zone ORDER BY event_hour DESC, congestion_rate DESC LIMIT 20"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 18, "w": 24, "h": 9}
+    }
+  ]
+}
