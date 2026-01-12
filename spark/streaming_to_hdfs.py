@@ -3,7 +3,7 @@ import os
 import time
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, from_json, to_date, to_timestamp
+from pyspark.sql.functions import col, coalesce, current_timestamp, from_json, to_date, to_timestamp
 from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType
 
 
@@ -38,6 +38,8 @@ def main():
     parser.add_argument("--starting-offsets", default="latest")
     parser.add_argument("--trigger-interval", default="30 seconds")
     parser.add_argument("--run-seconds", type=int, default=0)
+    parser.add_argument("--fail-on-data-loss", default="false")
+    parser.add_argument("--timestamp-format", default="yyyy-MM-dd HH:mm:ss")
     args = parser.parse_args()
 
     def normalize_path(path):
@@ -57,11 +59,14 @@ def main():
 
     schema = build_schema()
 
+    fail_on_data_loss = str(args.fail_on_data_loss).lower()
+
     raw_kafka = (
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", args.bootstrap_servers)
         .option("subscribe", args.topic)
         .option("startingOffsets", args.starting_offsets)
+        .option("failOnDataLoss", fail_on_data_loss)
         .load()
     )
 
@@ -73,8 +78,10 @@ def main():
     good = parsed.filter(col("data").isNotNull()).select("data.*")
     bad = parsed.filter(col("data").isNull()).select(col("json_value").alias("raw_value"))
 
-    good = good.withColumn("event_time", to_timestamp(col("event_time")))
-    good = good.filter(col("event_time").isNotNull())
+    good = good.withColumn(
+        "event_time", to_timestamp(col("event_time"), args.timestamp_format)
+    )
+    good = good.withColumn("event_time", coalesce(col("event_time"), current_timestamp()))
     good = good.withColumn("dt", to_date(col("event_time")))
 
     good_query = (

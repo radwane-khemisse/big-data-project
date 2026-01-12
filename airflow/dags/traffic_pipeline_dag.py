@@ -144,6 +144,7 @@ with DAG(
             f"--checkpoint-path {CHECKPOINT_PATH} "
             f"--bad-records-path {BAD_RAW_PATH} "
             "--starting-offsets latest "
+            "--fail-on-data-loss false "
             "--trigger-interval '30 seconds' "
             "> /opt/airflow/logs/traffic_streaming.log 2>&1 & "
             "echo \\$! > /opt/airflow/logs/traffic_streaming.pid; "

@@ -1,54 +1,51 @@
-﻿# Smart City Traffic - End-to-End Big Data Pipeline
+# Smart City Traffic Project
 
-This project implements the full Smart City traffic pipeline described in the assignment PDF: simulated sensors -> Kafka -> HDFS raw -> Spark processing -> analytics Parquet -> Grafana dashboards -> Airflow orchestration.
+This repository implements the Smart City Traffic pipeline end to end: simulated sensors -> Kafka -> HDFS raw -> Spark processing -> analytics (Parquet) -> Postgres KPI tables -> Grafana dashboards, orchestrated by Airflow.
 
-## Prerequisites
-- Docker and Docker Compose
-- Python 3.10+ (only if you want to run the generator from the host)
+## Architecture
+Process overview: the generator emits events, Kafka buffers them, Spark Streaming lands raw data in HDFS, Spark batch computes KPIs into analytics Parquet, the loader writes KPI tables to Postgres, and Grafana visualizes the KPIs. Airflow schedules and monitors the steps.
 
-## One-command startup
-From the repository root:
-```
-docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
-```
+![Architecture](screens/architecture-generale.png)
 
-## Service UIs
-- HDFS NameNode UI: http://localhost:9870
-- Spark Master UI: http://localhost:8080
-- Spark Worker UI: http://localhost:8081
-- Airflow UI: http://localhost:8082
-- Grafana UI: http://localhost:3000
+## Grafana Screens
+These dashboards read KPI tables from Postgres and refresh every few minutes.
 
-## Quick verification commands
-- Kafka topic list:
-```
-docker compose -f docker/docker-compose.yml exec kafka kafka-topics --bootstrap-server kafka:9092 --list
-```
-- HDFS raw path:
-```
-docker compose -f docker/docker-compose.yml exec namenode hdfs dfs -ls /data/raw/traffic
-```
-- Spark jobs folder:
-```
-docker compose -f docker/docker-compose.yml exec spark-master ls /opt/spark/jobs
-```
+![Grafana Avg Count by Zone](screens/grafana-avg-count-by-zone.png)
+![Grafana Avg Speed by Road](screens/grafana-avg-speed-by-road.png)
 
-## How to run the pipeline (manual)
-Detailed steps are in the RUNBOOK at the end of this response and in `docs/`.
+## Spark
+Spark runs two workloads:
+- Structured Streaming: Kafka -> HDFS raw at `/data/raw/traffic` (partitioned by `dt` and `zone`).
+- Batch KPIs: reads raw data, computes KPIs, writes analytics Parquet to `/data/analytics/traffic`.
 
-## Stop and clean volumes
-```
-docker compose -f docker/docker-compose.yml down -v
-```
+When streaming is active, Spark UI (`http://localhost:8080`) shows `traffic-kafka-to-hdfs` as RUNNING.
 
-## Troubleshooting
-- Port conflicts: change host ports in `docker/docker-compose.yml` if 9870/8080/8082/3000 are in use.
-- Memory: Spark and Kafka need RAM. If containers crash, increase Docker memory to 6-8 GB.
-- First Spark run downloads packages for Kafka. Ensure network access is available.
+![Spark Running Executors](screens/spark-running-executors.png)
 
-## Documentation
-- Architecture and flow: `docs/architecture.md`
-- KPI definitions and thresholds: `docs/kpis.md`
-- Partitioning and Parquet: `docs/partitioning.md`
-- Screenshots checklist: `docs/screenshots_checklist.md`
-- Assumptions: `docs/assumptions.md`
+## Project Structure
+- `generator/`: traffic sensor simulator + Kafka producer.
+- `spark/`: Spark jobs (streaming ingest, batch KPIs, load to Postgres).
+- `airflow/dags/`: orchestration DAGs.
+- `docker/`: Docker Compose stack + configs.
+- `docs/`: architecture notes, KPIs, assumptions, screenshots checklist.
+- `commands.md`: PowerShell command runbook.
+
+## Pipeline Steps
+1) Data generator emits JSON events: `sensor_id`, `road_id`, `road_type`, `zone`, `vehicle_count`, `average_speed`, `occupancy_rate`, `event_time`.
+2) Kafka topic `traffic-events` receives the stream.
+3) Spark Streaming writes raw data to `/data/raw/traffic` and checkpoints to `/data/checkpoints/traffic_raw`.
+4) Spark batch cleans data and computes KPIs (avg traffic by zone, avg speed by road, congestion rate, critical zones).
+5) Analytics Parquet tables are stored at `/data/analytics/traffic`.
+6) KPI tables are loaded into Postgres and visualized in Grafana.
+7) Airflow orchestrates all tasks on a 5 minute schedule.
+
+## How to Run
+Use `commands.md` for the exact PowerShell commands and verification steps.
+
+## How to Validate Each Stage
+- Kafka: consume a few events from `traffic-events`.
+- HDFS raw: check `/data/raw/traffic` partitions.
+- HDFS analytics: check `/data/analytics/traffic` tables.
+- Postgres: KPI table row counts should increase over time.
+- Grafana: panels should show data within the last 30 minutes and update every 5 minutes.
+- Airflow: DAG runs should complete with all tasks `success`.

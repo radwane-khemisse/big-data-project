@@ -2,36 +2,15 @@
 
 ```mermaid
 flowchart LR
-  subgraph Sources
-    S[Simulated Sensors]\nPython generator
-  end
+  S[Simulated Sensors<br/>Python generator] --> K[Kafka topic<br/>traffic-events]
+  K --> SS[Spark Structured Streaming<br/>Kafka -> HDFS raw]
+  SS --> R[HDFS Raw<br/>/data/raw/traffic]
+  R --> SB[Spark Batch<br/>KPIs + analytics]
+  SB --> A[HDFS Analytics<br/>/data/analytics/traffic]
+  A --> PG[Postgres KPI tables]
+  PG --> G[Grafana Dashboards]
 
-  subgraph Ingestion
-    K[Kafka topic\ntraffic-events]
-  end
-
-  subgraph DataLake
-    R[HDFS Raw\n/data/raw/traffic]
-    P[HDFS Processed\n/data/processed/traffic]
-    A[HDFS Analytics\n/data/analytics/traffic]
-  end
-
-  subgraph Processing
-    SS[Spark Structured Streaming]\nKafka -> Raw
-    SB[Spark Batch]\nKPIs + analytics
-  end
-
-  subgraph Serving
-    PG[Postgres KPI tables]
-    G[Grafana Dashboards]
-  end
-
-  subgraph Orchestration
-    AF[Airflow DAG]
-  end
-
-  S --> K --> SS --> R --> SB --> P --> A --> PG --> G
-  AF -.orchestrates.-> K
+  AF[Airflow DAG] -.orchestrates.-> K
   AF -.orchestrates.-> SS
   AF -.orchestrates.-> SB
   AF -.orchestrates.-> PG

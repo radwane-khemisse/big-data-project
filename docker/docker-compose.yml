@@ -80,7 +80,7 @@ services:
     environment:
       HADOOP_CONF_DIR: /opt/spark/conf/hadoop
       SPARK_WORKER_CORES: 2
-      SPARK_WORKER_MEMORY: 1g
+      SPARK_WORKER_MEMORY: 2g
     volumes:
       - ../spark:/opt/spark/jobs
       - ./hadoop/conf:/opt/spark/conf/hadoop
