@@ -1,10 +1,13 @@
-﻿import argparse
+import argparse
+import os
+import time
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     avg,
     col,
     count,
+    expr,
     floor,
     from_unixtime,
     sum as sum_,
@@ -16,18 +19,51 @@ from pyspark.sql.functions import (
 
 
 def main():
+    hdfs_base = os.getenv("HDFS_BASE", "hdfs://namenode:8020")
     parser = argparse.ArgumentParser(description="Spark batch processing for traffic KPIs")
-    parser.add_argument("--raw-path", default="/data/raw/traffic")
-    parser.add_argument("--processed-path", default="/data/processed/traffic")
-    parser.add_argument("--analytics-path", default="/data/analytics/traffic")
-    parser.add_argument("--bad-records-path", default="/data/bad/traffic_processed")
+    parser.add_argument("--raw-path", default=f"{hdfs_base}/data/raw/traffic")
+    parser.add_argument("--processed-path", default=f"{hdfs_base}/data/processed/traffic")
+    parser.add_argument("--analytics-path", default=f"{hdfs_base}/data/analytics/traffic")
+    parser.add_argument("--bad-records-path", default=f"{hdfs_base}/data/bad/traffic_processed")
+    parser.add_argument("--wait-seconds", type=int, default=120)
+    parser.add_argument("--wait-interval", type=int, default=5)
+    parser.add_argument("--lookback-minutes", type=int, default=60)
     parser.add_argument("--occupancy-threshold", type=float, default=70.0)
     parser.add_argument("--speed-threshold", type=float, default=20.0)
     parser.add_argument("--congestion-threshold", type=float, default=0.6)
     args = parser.parse_args()
 
+    def normalize_path(path):
+        if "://" in path:
+            return path
+        if path.startswith("/"):
+            return f"{hdfs_base}{path}"
+        return path
+
+    args.raw_path = normalize_path(args.raw_path)
+    args.processed_path = normalize_path(args.processed_path)
+    args.analytics_path = normalize_path(args.analytics_path)
+    if args.bad_records_path:
+        args.bad_records_path = normalize_path(args.bad_records_path)
+
     spark = SparkSession.builder.appName("traffic-processing").getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
+
+    if args.wait_seconds > 0:
+        conf = spark._jsc.hadoopConfiguration()
+        hadoop_path = spark._jvm.org.apache.hadoop.fs.Path(args.raw_path)
+        fs = hadoop_path.getFileSystem(conf)
+        start = time.time()
+        while True:
+            if fs.exists(hadoop_path):
+                entries = list(fs.listStatus(hadoop_path))
+                if entries:
+                    break
+            if time.time() - start >= args.wait_seconds:
+                raise RuntimeError(
+                    f"Raw path not ready after {args.wait_seconds}s: {args.raw_path}"
+                )
+            time.sleep(args.wait_interval)
 
     df = spark.read.parquet(args.raw_path)
 
@@ -57,10 +93,20 @@ def main():
         ),
     )
 
-    clean.write.mode("append").partitionBy("dt", "zone").parquet(args.processed_path)
+    windowed = clean
+    if args.lookback_minutes and args.lookback_minutes > 0:
+        windowed = clean.filter(
+            expr(
+                f"event_time >= current_timestamp() - interval {args.lookback_minutes} minutes"
+            )
+        )
+
+    windowed.write.mode("append").partitionBy("dt", "zone").parquet(
+        args.processed_path
+    )
 
     traffic_by_zone = (
-        clean.groupBy("dt", "event_hour", "zone")
+        windowed.groupBy("dt", "event_hour", "zone")
         .agg(
             avg("vehicle_count").alias("avg_vehicle_count"),
             sum_("vehicle_count").alias("total_vehicle_count"),
@@ -71,7 +117,7 @@ def main():
     )
 
     speed_by_road = (
-        clean.groupBy("dt", "event_hour", "road_id", "road_type")
+        windowed.groupBy("dt", "event_hour", "road_id", "road_type")
         .agg(
             avg("average_speed").alias("avg_speed"),
             avg("vehicle_count").alias("avg_vehicle_count"),
@@ -86,7 +132,7 @@ def main():
     ).otherwise(0)
 
     congestion_by_zone = (
-        clean.withColumn("is_congested", congestion_flag)
+        windowed.withColumn("is_congested", congestion_flag)
         .groupBy("dt", "event_hour", "zone")
         .agg(
             avg("is_congested").alias("congestion_rate"),

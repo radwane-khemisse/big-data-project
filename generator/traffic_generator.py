@@ -99,6 +99,7 @@ def main():
     parser.add_argument("--roads", type=int, default=20)
     parser.add_argument("--zones", default="north,south,center,east,west")
     parser.add_argument("--rate", type=float, default=20.0, help="events per second")
+    parser.add_argument("--sleep-seconds", type=float, default=None, help="fixed sleep between events")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--duration-seconds", type=int, default=0, help="0 means run forever")
     parser.add_argument("--max-events", type=int, default=0, help="0 means no limit")
@@ -114,7 +115,10 @@ def main():
     if not args.stdout_only:
         producer = build_producer(args.bootstrap_servers)
 
-    sleep_interval = 1.0 / args.rate if args.rate > 0 else 0.0
+    if args.sleep_seconds is not None:
+        sleep_interval = max(0.0, args.sleep_seconds)
+    else:
+        sleep_interval = 1.0 / args.rate if args.rate > 0 else 0.0
     event_count = 0
     start_time = time.time()
     next_emit = start_time

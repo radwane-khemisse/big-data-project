@@ -79,6 +79,8 @@ services:
       - spark-master
     environment:
       HADOOP_CONF_DIR: /opt/spark/conf/hadoop
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 1g
     volumes:
       - ../spark:/opt/spark/jobs
       - ./hadoop/conf:/opt/spark/conf/hadoop
@@ -111,6 +113,8 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
       AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
       HADOOP_CONF_DIR: /opt/hadoop/conf
+      PYSPARK_PYTHON: python3
+      PYSPARK_DRIVER_PYTHON: python3
     volumes:
       - ../airflow/dags:/opt/airflow/dags
       - ../generator:/opt/airflow/project/generator
@@ -130,6 +134,9 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
       AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
+      AIRFLOW__WEBSERVER__WORKERS: "1"
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
+      AIRFLOW__WEBSERVER__WEB_SERVER_WORKER_TIMEOUT: "300"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_TOPIC: ${KAFKA_TOPIC}
       KAFKA_PARTITIONS: ${KAFKA_PARTITIONS}
@@ -139,6 +146,8 @@ services:
       TRAFFIC_DB_USER: ${TRAFFIC_DB_USER}
       TRAFFIC_DB_PASSWORD: ${TRAFFIC_DB_PASSWORD}
       HADOOP_CONF_DIR: /opt/hadoop/conf
+      PYSPARK_PYTHON: python3
+      PYSPARK_DRIVER_PYTHON: python3
     volumes:
       - ../airflow/dags:/opt/airflow/dags
       - ../generator:/opt/airflow/project/generator
@@ -169,6 +178,8 @@ services:
       TRAFFIC_DB_USER: ${TRAFFIC_DB_USER}
       TRAFFIC_DB_PASSWORD: ${TRAFFIC_DB_PASSWORD}
       HADOOP_CONF_DIR: /opt/hadoop/conf
+      PYSPARK_PYTHON: python3
+      PYSPARK_DRIVER_PYTHON: python3
     volumes:
       - ../airflow/dags:/opt/airflow/dags
       - ../generator:/opt/airflow/project/generator

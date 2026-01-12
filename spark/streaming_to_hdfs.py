@@ -23,16 +23,34 @@ def build_schema():
 
 
 def main():
+    hdfs_base = os.getenv("HDFS_BASE", "hdfs://namenode:8020")
     parser = argparse.ArgumentParser(description="Spark streaming: Kafka -> HDFS raw zone")
-    parser.add_argument("--bootstrap-servers", default=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092"))
+    parser.add_argument(
+        "--bootstrap-servers",
+        default=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092"),
+    )
     parser.add_argument("--topic", default=os.getenv("KAFKA_TOPIC", "traffic-events"))
-    parser.add_argument("--raw-path", default="/data/raw/traffic")
-    parser.add_argument("--checkpoint-path", default="/data/checkpoints/traffic_raw")
-    parser.add_argument("--bad-records-path", default="/data/bad/traffic_raw")
+    parser.add_argument("--raw-path", default=f"{hdfs_base}/data/raw/traffic")
+    parser.add_argument(
+        "--checkpoint-path", default=f"{hdfs_base}/data/checkpoints/traffic_raw"
+    )
+    parser.add_argument("--bad-records-path", default=f"{hdfs_base}/data/bad/traffic_raw")
     parser.add_argument("--starting-offsets", default="latest")
     parser.add_argument("--trigger-interval", default="30 seconds")
     parser.add_argument("--run-seconds", type=int, default=0)
     args = parser.parse_args()
+
+    def normalize_path(path):
+        if "://" in path:
+            return path
+        if path.startswith("/"):
+            return f"{hdfs_base}{path}"
+        return path
+
+    args.raw_path = normalize_path(args.raw_path)
+    args.checkpoint_path = normalize_path(args.checkpoint_path)
+    if args.bad_records_path:
+        args.bad_records_path = normalize_path(args.bad_records_path)
 
     spark = SparkSession.builder.appName("traffic-kafka-to-hdfs").getOrCreate()
     spark.sparkContext.setLogLevel("WARN")

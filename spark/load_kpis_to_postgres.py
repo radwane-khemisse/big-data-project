@@ -1,4 +1,5 @@
 import argparse
+import os
 
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (
@@ -36,14 +37,24 @@ def read_or_empty(spark, path, schema):
 
 
 def main():
+    hdfs_base = os.getenv("HDFS_BASE", "hdfs://namenode:8020")
     parser = argparse.ArgumentParser(description="Load KPI tables into Postgres")
-    parser.add_argument("--analytics-path", default="/data/analytics/traffic")
+    parser.add_argument("--analytics-path", default=f"{hdfs_base}/data/analytics/traffic")
     parser.add_argument("--jdbc-url", required=True)
     parser.add_argument("--jdbc-user", required=True)
     parser.add_argument("--jdbc-password", required=True)
     parser.add_argument("--jdbc-driver", default="org.postgresql.Driver")
     parser.add_argument("--mode", default="overwrite")
     args = parser.parse_args()
+
+    def normalize_path(path):
+        if "://" in path:
+            return path
+        if path.startswith("/"):
+            return f"{hdfs_base}{path}"
+        return path
+
+    args.analytics_path = normalize_path(args.analytics_path)
 
     spark = SparkSession.builder.appName("traffic-load-kpis").getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
